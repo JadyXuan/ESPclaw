@@ -2,6 +2,7 @@
 #include <WiFi.h>
 #include <esp_now.h>
 #include <esp_wifi.h>
+#include <esp_heap_caps.h>
 #include <LovyanGFX.hpp>
 
 #include "config.h"
@@ -200,27 +201,49 @@ static void updateAnimation() {
 // ============================================================
 void setup() {
     Serial.begin(115200);
-    delay(500);
-    Serial.println("Fursuit Eyes starting...");
+    delay(1000);
+    Serial.println("\n===== Fursuit Eyes starting =====");
+
+    // ---- PSRAM diagnostic ----
+    size_t psramTotal = ESP.getPsramSize();
+    size_t psramFree  = ESP.getFreePsram();
+    Serial.printf("PSRAM: %u total, %u free\n", psramTotal, psramFree);
+    Serial.printf("Heap:  %u free\n", ESP.getFreeHeap());
+
+    if (psramTotal == 0) {
+        Serial.println("FATAL: No PSRAM detected! Check SPIRAM sdkconfig.");
+        while (1) delay(1000);
+    }
 
 #ifdef BOARD_JC8048W550
-    Serial.println("Init display...");
-    if (!display.init()) {
-        Serial.println("ERROR: display.init() failed");
-    }
-    Serial.println("Display init OK");
+    // ---- Allocate sprites BEFORE display.init() ----
+    // The RGB LCD peripheral starts DMA from PSRAM once init() is called.
+    // Large PSRAM allocations after that cause bus contention → watchdog reset.
+    Serial.println("Pre-allocating sprites in PSRAM...");
+    spriteL.setColorDepth(16);
+    spriteL.setPsram(true);
+    void* bufL = spriteL.createSprite(EYE_SIZE, EYE_SIZE);
+    Serial.printf("  spriteL: %p  (free PSRAM: %u)\n", bufL, ESP.getFreePsram());
 
-    // GPIO backlight — do not use display.setBrightness() on RGB panels
+    spriteR.setColorDepth(16);
+    spriteR.setPsram(true);
+    void* bufR = spriteR.createSprite(EYE_SIZE, EYE_SIZE);
+    Serial.printf("  spriteR: %p  (free PSRAM: %u)\n", bufR, ESP.getFreePsram());
+
+    if (!bufL || !bufR) {
+        Serial.println("FATAL: Sprite allocation failed!");
+        Serial.printf("  Needed: %d bytes per sprite\n", EYE_SIZE * EYE_SIZE * 2);
+        while (1) delay(1000);
+    }
+
+    // ---- NOW init the display (starts LCD DMA) ----
+    Serial.println("Init RGB display...");
+    display.init();
+    delay(50);
+
     pinMode(2, OUTPUT);
     digitalWrite(2, HIGH);
-    Serial.println("Backlight ON");
-
-    delay(50);
-    Serial.println("fillScreen...");
-    // Temporarily skip full-screen fill to avoid watchdog/interrupt issues during
-    // RGB panel bring-up. The first sprite push will paint the screen.
-    // display.fillScreen(EYE_BG_COLOR);
-    Serial.println("Display ready (skipped fillScreen)");
+    Serial.println("Display + backlight OK");
 #else
     displayL.init();
     displayL.setRotation(0);
@@ -232,22 +255,14 @@ void setup() {
     displayR.setBrightness(200);
     displayR.fillScreen(EYE_BG_COLOR);
   #endif
-#endif
 
-    Serial.println("Create sprites...");
     spriteL.setColorDepth(16);
     spriteR.setColorDepth(16);
-    spriteL.setPsram(true);
-    spriteR.setPsram(true);
-    if (!spriteL.createSprite(EYE_SIZE, EYE_SIZE)) {
-        Serial.println("ERROR: spriteL create failed (PSRAM?)");
-    }
-    Serial.println("spriteL OK");
-    if (!spriteR.createSprite(EYE_SIZE, EYE_SIZE)) {
-        Serial.println("ERROR: spriteR create failed (PSRAM?)");
-    }
-    Serial.println("spriteR OK");
+    spriteL.createSprite(EYE_SIZE, EYE_SIZE);
+    spriteR.createSprite(EYE_SIZE, EYE_SIZE);
+#endif
 
+    // ---- Eye renderers ----
     EyeRenderer::Config eyeCfg;
     eyeCfg.screenSize     = EYE_SIZE;
     eyeCfg.irisHue        = IRIS_HUE;
@@ -263,8 +278,8 @@ void setup() {
     eyeCfg.mirror = true;
     eyeR.init(&spriteR, eyeCfg);
 
+    // ---- ESP-NOW ----
     Serial.println("Init ESP-NOW...");
-    // --- ESP-NOW ---
     WiFi.mode(WIFI_STA);
     WiFi.disconnect();
     esp_wifi_set_channel(ESPNOW_CHANNEL, WIFI_SECOND_CHAN_NONE);
@@ -276,6 +291,8 @@ void setup() {
 
     nextBlinkAt = millis() + random(2000, 5000);
 
+    Serial.printf("Setup done. Free PSRAM: %u, free heap: %u\n",
+                  ESP.getFreePsram(), ESP.getFreeHeap());
     Serial.println("Ready. Waiting for glove...");
 }
 
@@ -297,7 +314,7 @@ void loop() {
     eyeR.render(stateR);
 
 #ifdef BOARD_JC8048W550
-    int16_t offsetY = (SCREEN_H - EYE_SIZE) / 2;  // 40px vertical centering
+    int16_t offsetY = (SCREEN_H - EYE_SIZE) / 2;
     spriteL.pushSprite(0, offsetY);
     spriteR.pushSprite(EYE_SIZE, offsetY);
 #elif defined(DUAL_DISPLAY)
@@ -309,11 +326,7 @@ void loop() {
 #endif
 
     frameCount++;
-    if (frameCount % 30 == 0) {
-        Serial.print("Frame ");
-        Serial.print(frameCount);
-        Serial.print(" @ ");
-        Serial.print(now / 1000);
-        Serial.println("s");
+    if (frameCount % 60 == 0) {
+        Serial.printf("Frame %u @ %us\n", frameCount, now / 1000);
     }
 }
