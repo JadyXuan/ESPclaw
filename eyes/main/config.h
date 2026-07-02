@@ -1,20 +1,17 @@
 #pragma once
 
 // ============================================================
-//  Display Mode
-//  DUAL_DISPLAY:   production mode, one GC9A01 per eye
-//  SINGLE_DISPLAY: test mode, both eyes on one screen
+//  Display Mode — uncomment ONE
 // ============================================================
-#define DUAL_DISPLAY
-// #define SINGLE_DISPLAY
+// #define DUAL_DISPLAY       // Production: two GC9A01 240x240 round displays
+// #define SINGLE_DISPLAY     // Test: one GC9A01 with both eyes
+#define BOARD_JC8048W550      // Test: Guition 5" 800x480 RGB display
 
 // ============================================================
 //  GC9A01 240x240 Round Display - Pin Assignment
-//  Left eye uses SPI2 (FSPI), right eye uses SPI3
 // ============================================================
 #ifdef DUAL_DISPLAY
 
-// Left eye (SPI2)
 #define LEFT_SCLK  12
 #define LEFT_MOSI  11
 #define LEFT_CS    10
@@ -22,7 +19,6 @@
 #define LEFT_RST   14
 #define LEFT_BL     2
 
-// Right eye (SPI3)
 #define RIGHT_SCLK 36
 #define RIGHT_MOSI 35
 #define RIGHT_CS   34
@@ -32,13 +28,10 @@
 
 #define SCREEN_W 240
 #define SCREEN_H 240
+#define EYE_SIZE 240
 
 #endif
 
-// ============================================================
-//  Single display test mode
-//  Adapt these pins to your specific dev board
-// ============================================================
 #ifdef SINGLE_DISPLAY
 
 #define LEFT_SCLK  12
@@ -50,6 +43,19 @@
 
 #define SCREEN_W 240
 #define SCREEN_H 240
+#define EYE_SIZE 120
+
+#endif
+
+// ============================================================
+//  JC8048W550 5" 800x480 RGB Display
+//  Two eyes rendered side-by-side, each 400x400
+// ============================================================
+#ifdef BOARD_JC8048W550
+
+#define SCREEN_W 800
+#define SCREEN_H 480
+#define EYE_SIZE 400
 
 #endif
 
@@ -58,17 +64,17 @@
 // ============================================================
 #define EYE_BG_COLOR      0x0000
 
-#define IRIS_HUE          195   // HSL hue 0-360
-#define IRIS_SATURATION   100   // 0-100
-#define IRIS_BRIGHTNESS   79    // 0-100
+#define IRIS_HUE          195
+#define IRIS_SATURATION   100
+#define IRIS_BRIGHTNESS   79
 
-#define PUPIL_H_PCT       58    // pupil ellipse height % of radius
-#define PUPIL_W_PCT        30    // pupil ellipse width % of radius
-#define HIGHLIGHT_SIZE_PCT 25    // main highlight size % of radius
-#define LID_SHADOW_PCT     21    // top shadow depth %
+#define PUPIL_H_PCT       58
+#define PUPIL_W_PCT       30
+#define HIGHLIGHT_SIZE_PCT 25
+#define LID_SHADOW_PCT    21
 
-#define GRADIENT_BANDS    20    // iris gradient smoothness
-#define HIGHLIGHT_BANDS    5    // highlight gradient layers
+#define GRADIENT_BANDS    20
+#define HIGHLIGHT_BANDS    5
 
 // ============================================================
 //  Animation timing

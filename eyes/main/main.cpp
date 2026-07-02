@@ -9,9 +9,18 @@
 #include "eye_renderer.h"
 
 // ============================================================
-//  Display setup — GC9A01 240x240 round displays
-//  Change pins in config.h to match your wiring.
+//  Display setup — selected by #define in config.h
 // ============================================================
+
+#ifdef BOARD_JC8048W550
+
+#include "lgfx_jc8048w550.h"
+static LGFX_JC8048W550 display;
+static LGFX_Sprite spriteL(&display);
+static LGFX_Sprite spriteR(&display);
+
+#else
+
 class LGFX_Eye : public lgfx::LGFX_Device {
     lgfx::Panel_GC9A01 _panel;
     lgfx::Bus_SPI      _bus;
@@ -47,9 +56,6 @@ public:
     }
 };
 
-// ============================================================
-//  Globals
-// ============================================================
 #ifdef DUAL_DISPLAY
 static LGFX_Eye displayL(SPI2_HOST, LEFT_SCLK, LEFT_MOSI, LEFT_CS, LEFT_DC, LEFT_RST, LEFT_BL);
 static LGFX_Eye displayR(SPI3_HOST, RIGHT_SCLK, RIGHT_MOSI, RIGHT_CS, RIGHT_DC, RIGHT_RST, RIGHT_BL);
@@ -60,6 +66,8 @@ static LGFX_Eye displayL(SPI2_HOST, LEFT_SCLK, LEFT_MOSI, LEFT_CS, LEFT_DC, LEFT
 static LGFX_Sprite spriteL(&displayL);
 static LGFX_Sprite spriteR(&displayL);
 #endif
+
+#endif // BOARD_JC8048W550
 
 static EyeRenderer eyeL, eyeR;
 static EyeState stateL, stateR;
@@ -121,19 +129,16 @@ static void updateAnimation() {
     uint32_t now = millis();
     float t = now * 0.001f;
 
-    // ---- idle eye movement (sine-wave drift) ----
     float idleX = sinf(t * 0.7f) * 0.20f + sinf(t * 0.31f) * 0.10f;
     float idleY = sinf(t * 0.5f + 1.3f) * 0.15f + cosf(t * 0.23f) * 0.05f;
     float idlePupil = 1.0f + sinf(t * 1.5f) * 0.08f;
 
-    // ---- glove input ----
     if (gloveConnected && (now - lastGloveTime < 500)) {
         GlovePacket gd;
         noInterrupts();
         memcpy(&gd, (void*)&gloveData, sizeof(gd));
         interrupts();
 
-        // continuous: index finger → horizontal gaze, middle → vertical
         targetGazeX = mapf(gd.finger[0], 0, 255, 0.5f, -0.5f);
         targetGazeY = mapf(gd.finger[1], 0, 255, -0.3f, 0.3f);
         currentPupil = mapf(gd.finger[2], 0, 255, 1.0f, 0.6f);
@@ -155,13 +160,11 @@ static void updateAnimation() {
         targetOpen = 1.0f;
     }
 
-    // ---- auto blink ----
     if (!isBlinking && now >= nextBlinkAt) {
         triggerBlink();
         nextBlinkAt = now + random(BLINK_MIN_INTERVAL_MS, BLINK_MAX_INTERVAL_MS);
     }
 
-    // ---- blink curve ----
     if (isBlinking) {
         float bt = (float)(now - blinkStart) / BLINK_DURATION_MS;
         if (bt >= 1.0f) {
@@ -178,11 +181,9 @@ static void updateAnimation() {
         currentOpen += (targetOpen - currentOpen) * 0.2f;
     }
 
-    // ---- smooth interpolation ----
     currentGazeX += (targetGazeX - currentGazeX) * 0.12f;
     currentGazeY += (targetGazeY - currentGazeY) * 0.12f;
 
-    // ---- apply to both eyes ----
     stateL.gazeX = currentGazeX;
     stateL.gazeY = currentGazeY;
     stateL.openness = currentOpen;
@@ -201,35 +202,31 @@ void setup() {
     Serial.begin(115200);
     Serial.println("Fursuit Eyes starting...");
 
-    // --- displays ---
+#ifdef BOARD_JC8048W550
+    display.init();
+    display.setRotation(0);
+    display.setBrightness(200);
+    display.fillScreen(EYE_BG_COLOR);
+#else
     displayL.init();
     displayL.setRotation(0);
     displayL.setBrightness(200);
     displayL.fillScreen(EYE_BG_COLOR);
-
-#ifdef DUAL_DISPLAY
+  #ifdef DUAL_DISPLAY
     displayR.init();
     displayR.setRotation(0);
     displayR.setBrightness(200);
     displayR.fillScreen(EYE_BG_COLOR);
+  #endif
 #endif
 
-    // --- sprites (16-bit color, PSRAM if available) ---
     spriteL.setColorDepth(16);
     spriteR.setColorDepth(16);
+    spriteL.createSprite(EYE_SIZE, EYE_SIZE);
+    spriteR.createSprite(EYE_SIZE, EYE_SIZE);
 
-#ifdef DUAL_DISPLAY
-    spriteL.createSprite(SCREEN_W, SCREEN_H);
-    spriteR.createSprite(SCREEN_W, SCREEN_H);
-#else
-    int halfW = SCREEN_W / 2;
-    spriteL.createSprite(halfW, SCREEN_H);
-    spriteR.createSprite(halfW, SCREEN_H);
-#endif
-
-    // --- eye renderers (gem style) ---
     EyeRenderer::Config eyeCfg;
-    eyeCfg.screenSize     = SCREEN_W;
+    eyeCfg.screenSize     = EYE_SIZE;
     eyeCfg.irisHue        = IRIS_HUE;
     eyeCfg.irisSat        = IRIS_SATURATION / 100.0f;
     eyeCfg.irisBrightness = IRIS_BRIGHTNESS / 100.0f;
@@ -238,18 +235,10 @@ void setup() {
     eyeCfg.highlightPct   = HIGHLIGHT_SIZE_PCT / 100.0f;
     eyeCfg.lidShadowPct   = LID_SHADOW_PCT / 100.0f;
 
-#ifdef DUAL_DISPLAY
     eyeCfg.mirror = false;
     eyeL.init(&spriteL, eyeCfg);
     eyeCfg.mirror = true;
     eyeR.init(&spriteR, eyeCfg);
-#else
-    eyeCfg.screenSize = SCREEN_W / 2;
-    eyeCfg.mirror = false;
-    eyeL.init(&spriteL, eyeCfg);
-    eyeCfg.mirror = true;
-    eyeR.init(&spriteR, eyeCfg);
-#endif
 
     // --- ESP-NOW ---
     WiFi.mode(WIFI_STA);
@@ -261,7 +250,6 @@ void setup() {
     }
     esp_now_register_recv_cb(onEspNowRecv);
 
-    // --- seed random for blink timing ---
     nextBlinkAt = millis() + random(2000, 5000);
 
     Serial.println("Ready. Waiting for glove...");
@@ -283,11 +271,15 @@ void loop() {
     eyeL.render(stateL);
     eyeR.render(stateR);
 
-#ifdef DUAL_DISPLAY
+#ifdef BOARD_JC8048W550
+    int16_t offsetY = (SCREEN_H - EYE_SIZE) / 2;  // 40px vertical centering
+    spriteL.pushSprite(0, offsetY);
+    spriteR.pushSprite(EYE_SIZE, offsetY);
+#elif defined(DUAL_DISPLAY)
     spriteL.pushSprite(0, 0);
     spriteR.pushSprite(0, 0);
 #else
     spriteL.pushSprite(0, 0);
-    spriteR.pushSprite(SCREEN_W / 2, 0);
+    spriteR.pushSprite(EYE_SIZE, 0);
 #endif
 }
