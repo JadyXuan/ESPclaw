@@ -14,3 +14,6 @@ CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
 
 # Partition table (with enough app space)
 CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y
+
+# JC8048W550 boards usually ship with 16MB flash
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y

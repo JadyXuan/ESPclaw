@@ -1,7 +1,7 @@
 #pragma once
 #include <cstdint>
 
-#define ESPNOW_CHANNEL 0
+#define ESPNOW_CHANNEL 1
 
 enum PacketType : uint8_t {
     PKT_GLOVE_DATA = 0x01,

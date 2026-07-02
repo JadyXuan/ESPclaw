@@ -200,13 +200,27 @@ static void updateAnimation() {
 // ============================================================
 void setup() {
     Serial.begin(115200);
+    delay(500);
     Serial.println("Fursuit Eyes starting...");
 
 #ifdef BOARD_JC8048W550
-    display.init();
-    display.setRotation(0);
-    display.setBrightness(200);
-    display.fillScreen(EYE_BG_COLOR);
+    Serial.println("Init display...");
+    if (!display.init()) {
+        Serial.println("ERROR: display.init() failed");
+    }
+    Serial.println("Display init OK");
+
+    // GPIO backlight — do not use display.setBrightness() on RGB panels
+    pinMode(2, OUTPUT);
+    digitalWrite(2, HIGH);
+    Serial.println("Backlight ON");
+
+    delay(50);
+    Serial.println("fillScreen...");
+    // Temporarily skip full-screen fill to avoid watchdog/interrupt issues during
+    // RGB panel bring-up. The first sprite push will paint the screen.
+    // display.fillScreen(EYE_BG_COLOR);
+    Serial.println("Display ready (skipped fillScreen)");
 #else
     displayL.init();
     displayL.setRotation(0);
@@ -220,10 +234,19 @@ void setup() {
   #endif
 #endif
 
+    Serial.println("Create sprites...");
     spriteL.setColorDepth(16);
     spriteR.setColorDepth(16);
-    spriteL.createSprite(EYE_SIZE, EYE_SIZE);
-    spriteR.createSprite(EYE_SIZE, EYE_SIZE);
+    spriteL.setPsram(true);
+    spriteR.setPsram(true);
+    if (!spriteL.createSprite(EYE_SIZE, EYE_SIZE)) {
+        Serial.println("ERROR: spriteL create failed (PSRAM?)");
+    }
+    Serial.println("spriteL OK");
+    if (!spriteR.createSprite(EYE_SIZE, EYE_SIZE)) {
+        Serial.println("ERROR: spriteR create failed (PSRAM?)");
+    }
+    Serial.println("spriteR OK");
 
     EyeRenderer::Config eyeCfg;
     eyeCfg.screenSize     = EYE_SIZE;
@@ -240,6 +263,7 @@ void setup() {
     eyeCfg.mirror = true;
     eyeR.init(&spriteR, eyeCfg);
 
+    Serial.println("Init ESP-NOW...");
     // --- ESP-NOW ---
     WiFi.mode(WIFI_STA);
     WiFi.disconnect();
@@ -260,6 +284,7 @@ void setup() {
 // ============================================================
 void loop() {
     static uint32_t lastFrame = 0;
+    static uint32_t frameCount = 0;
     uint32_t now = millis();
 
     uint32_t frameInterval = 1000 / TARGET_FPS;
@@ -282,4 +307,13 @@ void loop() {
     spriteL.pushSprite(0, 0);
     spriteR.pushSprite(EYE_SIZE, 0);
 #endif
+
+    frameCount++;
+    if (frameCount % 30 == 0) {
+        Serial.print("Frame ");
+        Serial.print(frameCount);
+        Serial.print(" @ ");
+        Serial.print(now / 1000);
+        Serial.println("s");
+    }
 }

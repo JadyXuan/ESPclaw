@@ -1,0 +1,10 @@
+# ESP-IDF build output
+/build/
+/sdkconfig
+/sdkconfig.old
+
+# Component Manager downloads (rebuilt by idf.py build)
+/managed_components/
+
+# Local LovyanGFX clone (see BRINGUP.md)
+/components/LovyanGFX/

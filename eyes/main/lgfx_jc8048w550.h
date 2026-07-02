@@ -6,10 +6,8 @@
 #include <lgfx/v1/platforms/esp32s3/Bus_RGB.hpp>
 
 class LGFX_JC8048W550 : public lgfx::LGFX_Device {
-    lgfx::Bus_RGB     _bus;
-    lgfx::Panel_RGB   _panel;
-    lgfx::Light_PWM   _light;
-    lgfx::Touch_GT911 _touch;
+    lgfx::Bus_RGB   _bus;
+    lgfx::Panel_RGB _panel;
 
 public:
     LGFX_JC8048W550(void) {
@@ -54,7 +52,7 @@ public:
             cfg.pin_vsync   = GPIO_NUM_41;
             cfg.pin_hsync   = GPIO_NUM_39;
             cfg.pin_pclk    = GPIO_NUM_42;
-            cfg.freq_write  = 16000000;
+            cfg.freq_write  = 10000000;
 
             cfg.hsync_polarity    = 0;
             cfg.hsync_front_porch = 8;
@@ -72,31 +70,8 @@ public:
         }
         _panel.setBus(&_bus);
 
-        {
-            auto cfg = _light.config();
-            cfg.pin_bl = GPIO_NUM_2;
-            _light.config(cfg);
-        }
-        _panel.light(&_light);
-
-        {
-            auto cfg = _touch.config();
-            cfg.x_min = 0;
-            cfg.x_max = 799;
-            cfg.y_min = 0;
-            cfg.y_max = 479;
-            cfg.pin_int = GPIO_NUM_18;
-            cfg.pin_rst = GPIO_NUM_38;
-            cfg.bus_shared = false;
-            cfg.offset_rotation = 0;
-            cfg.i2c_port = I2C_NUM_0;
-            cfg.pin_sda = GPIO_NUM_19;
-            cfg.pin_scl = GPIO_NUM_20;
-            cfg.freq = 400000;
-            cfg.i2c_addr = 0x5D;
-            _touch.config(cfg);
-            _panel.setTouch(&_touch);
-        }
+        // Backlight is driven manually via GPIO2 in setup() — Light_PWM can
+        // conflict with the ESP32-S3 RGB LCD peripheral.
 
         setPanel(&_panel);
     }

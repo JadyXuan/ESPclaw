@@ -1,5 +1,5 @@
 dependencies:
   espressif/arduino-esp32:
     version: "^3.1.0"
-  lovyan03/LovyanGFX:
-    version: "^1.2.0"
+  LovyanGFX:
+    override_path: "../components/LovyanGFX"
